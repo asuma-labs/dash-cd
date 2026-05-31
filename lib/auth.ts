@@ -8,6 +8,7 @@ export function setToken(token: string): void {
     expires: COOKIE_EXPIRES,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
+    path: "/",
   });
 
   if (typeof window !== "undefined") {
