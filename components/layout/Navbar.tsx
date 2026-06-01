@@ -10,6 +10,10 @@ import {
   Bot,
   Menu,
   X,
+  Gamepad2,
+  Wrench,
+  MessageSquare,
+  Radio,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -20,13 +24,16 @@ export function Navbar() {
 
   const navLinks = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/game", label: "Game", icon: Gamepad2 },
+    { href: "/tools", label: "Tools", icon: Wrench },
+    { href: "/chatbots", label: "Chatbots", icon: MessageSquare },
+    { href: "/jadibot", label: "Jadibot", icon: Radio },
   ];
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-bg-border bg-bg-secondary/80 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
           <Link href="/dashboard" className="flex items-center gap-2.5 group">
             <div className="relative w-8 h-8 rounded-lg bg-accent-green/10 border border-accent-green/30 flex items-center justify-center group-hover:border-accent-green/60 transition-all">
               <Bot className="w-4 h-4 text-accent-green" />
@@ -37,7 +44,6 @@ export function Navbar() {
             </div>
           </Link>
 
-          {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1">
             {navLinks.map(({ href, label, icon: Icon }) => (
               <Link
@@ -55,7 +61,6 @@ export function Navbar() {
             ))}
           </nav>
 
-          {/* User info + logout */}
           <div className="hidden md:flex items-center gap-3">
             {user && (
               <div className="flex items-center gap-2">
@@ -78,7 +83,6 @@ export function Navbar() {
             </Button>
           </div>
 
-          {/* Mobile menu toggle */}
           <button
             className="md:hidden text-gray-400 hover:text-white p-1"
             onClick={() => setMenuOpen(!menuOpen)}
@@ -87,7 +91,6 @@ export function Navbar() {
           </button>
         </div>
 
-        {/* Mobile menu */}
         {menuOpen && (
           <div className="md:hidden border-t border-bg-border py-3 space-y-1 animate-fade-in">
             {navLinks.map(({ href, label, icon: Icon }) => (
