@@ -97,29 +97,47 @@ export default function DashboardPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchAll = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    else setRefreshing(true);
+const fetchAll = useCallback(async (silent = false) => {
+  if (!silent) setLoading(true);
+  else setRefreshing(true);
 
-    try {
-      const [status, stats, clonesData, lb] = await Promise.allSettled([
-        botService.getBotStatus(),
-        botService.getSystemStats(),
-        botService.getClones(),
-        botService.getLeaderboard(),
-      ]);
+  try {
+    const [status, stats, clonesData, lb] = await Promise.allSettled([
+      botService.getBotStatus(),
+      botService.getSystemStats(),
+      botService.getClones(),
+      botService.getLeaderboard(),
+    ]);
 
-      if (status.status === "fulfilled") setBotStatus(status.value);
-      if (stats.status === "fulfilled") setSysStats(stats.value);
-      if (clonesData.status === "fulfilled") setClones(clonesData.value);
-      if (lb.status === "fulfilled") setLeaderboard(lb.value.slice(0, 10));
+    // Logging untuk debugging (di console browser)
+    console.log("API Results:", { status, stats, clonesData, lb });
 
-      setLastUpdated(new Date());
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    if (status.status === "fulfilled") {
+      console.log("Bot Status:", status.value);
+      setBotStatus(status.value);
+    } else {
+      console.error("Bot Status Error:", status.reason);
     }
-  }, []);
+    
+    if (stats.status === "fulfilled") {
+      console.log("System Stats:", stats.value);
+      setSysStats(stats.value);
+    } else {
+      console.error("System Stats Error:", stats.reason);
+    }
+    
+    if (clonesData.status === "fulfilled") setClones(clonesData.value);
+    else console.error("Clones Error:", clonesData.reason);
+    
+    if (lb.status === "fulfilled") setLeaderboard(lb.value.slice(0, 10));
+    else console.error("Leaderboard Error:", lb.reason);
+
+    setLastUpdated(new Date());
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+}, []);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
