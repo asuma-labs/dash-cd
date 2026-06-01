@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { botService } from "@/services/bot.service";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, StatCard } from "@/components/ui/Card";
@@ -84,7 +85,8 @@ function SkeletonCard() {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const router = useRouter();
+  const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const [botStatus, setBotStatus] = useState<BotStatus | null>(null);
   const [sysStats, setSysStats] = useState<SystemStats | null>(null);
   const [clones, setClones] = useState<Clone[]>([]);
@@ -118,14 +120,41 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // 🔥 HANYA panggil fetchAll jika sudah authenticated dan auth tidak loading
   useEffect(() => {
-    fetchAll(false);
-    intervalRef.current = setInterval(() => fetchAll(true), 30_000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [fetchAll]);
+    if (!authLoading && isAuthenticated) {
+      fetchAll(false);
+      intervalRef.current = setInterval(() => fetchAll(true), 30_000);
+      return () => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+      };
+    }
+  }, [authLoading, isAuthenticated, fetchAll]);
 
+  // Redirect jika tidak authenticated dan auth sudah selesai loading
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push("/login");
+    }
+  }, [authLoading, isAuthenticated, router]);
+
+  // Tampilkan loading indicator saat auth sedang memverifikasi
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-accent-green mx-auto"></div>
+          <p className="mt-4 text-gray-600">Memeriksa autentikasi...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null; // useEffect di atas akan melakukan redirect
+  }
+
+  // ─── Render konten dashboard (sama seperti kode aslimu) ────────────────────
   const ram = sysStats?.ram;
   const ramPercent =
     ram?.percent ??
@@ -150,8 +179,8 @@ export default function DashboardPage() {
           </h1>
           <p className="text-sm text-gray-600 mt-0.5">
             {lastUpdated
-              ? `Last updated: ${lastUpdated.toLocaleTimeString()}`
-              : "Loading data..."}
+              ? `Terakhir diperbarui: ${lastUpdated.toLocaleTimeString()}`
+              : "Memuat data..."}
           </p>
         </div>
 
@@ -171,7 +200,7 @@ export default function DashboardPage() {
       <section>
         <h2 className="text-xs text-gray-600 uppercase tracking-widest font-semibold mb-3 flex items-center gap-2">
           <Activity className="w-3.5 h-3.5" />
-          Bot Status
+          Status Bot
         </h2>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -196,11 +225,11 @@ export default function DashboardPage() {
                 value={botStatus?.clones ?? clones.length ?? 0}
                 icon={<Users className="w-4 h-4" />}
                 status="neutral"
-                subtext="active instances"
+                subtext="instance aktif"
               />
               <StatCard
-                label="Public"
-                value={botStatus?.public ? "Yes" : "No"}
+                label="Publik"
+                value={botStatus?.public ? "Ya" : "Tidak"}
                 icon={<Globe className="w-4 h-4" />}
                 status={botStatus?.public ? "online" : "offline"}
               />
@@ -213,7 +242,7 @@ export default function DashboardPage() {
       <section>
         <h2 className="text-xs text-gray-600 uppercase tracking-widest font-semibold mb-3 flex items-center gap-2">
           <Server className="w-3.5 h-3.5" />
-          System Stats
+          Statistik Sistem
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -225,7 +254,7 @@ export default function DashboardPage() {
               <Card glow className="col-span-1">
                 <div className="flex items-start justify-between mb-3">
                   <p className="text-xs text-gray-500 uppercase tracking-widest font-medium">
-                    RAM Usage
+                    Penggunaan RAM
                   </p>
                   <MemoryStick className="w-4 h-4 text-gray-600" />
                 </div>
@@ -273,7 +302,7 @@ export default function DashboardPage() {
                 </p>
                 {sysStats?.cpu?.cores && (
                   <p className="text-xs text-gray-600 mt-1">
-                    {sysStats.cpu.cores} cores
+                    {sysStats.cpu.cores} core
                   </p>
                 )}
               </Card>
@@ -292,12 +321,12 @@ export default function DashboardPage() {
                 <div className="mt-1 space-y-0.5">
                   {sysStats?.arch && (
                     <p className="text-xs text-gray-600">
-                      Arch: {sysStats.arch}
+                      Arsitektur: {sysStats.arch}
                     </p>
                   )}
                   {sysStats?.node_version && (
                     <p className="text-xs text-gray-600">
-                      Node: {sysStats.node_version}
+                      Node.js: {sysStats.node_version}
                     </p>
                   )}
                 </div>
@@ -313,7 +342,7 @@ export default function DashboardPage() {
         <section>
           <h2 className="text-xs text-gray-600 uppercase tracking-widest font-semibold mb-3 flex items-center gap-2">
             <Phone className="w-3.5 h-3.5" />
-            Clone Bots{" "}
+            Clone Bot{" "}
             <span className="text-accent-green">({clones.length})</span>
           </h2>
 
@@ -333,7 +362,7 @@ export default function DashboardPage() {
             ) : clones.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <WifiOff className="w-8 h-8 text-gray-700 mb-2" />
-                <p className="text-sm text-gray-600">No clone bots found</p>
+                <p className="text-sm text-gray-600">Tidak ada clone bot ditemukan</p>
               </div>
             ) : (
               <ul className="divide-y divide-bg-border">
@@ -353,14 +382,14 @@ export default function DashboardPage() {
                       </p>
                       {clone.owner && (
                         <p className="text-xs text-gray-600 truncate">
-                          Owner: {clone.owner}
+                          Pemilik: {clone.owner}
                         </p>
                       )}
                     </div>
                     <StatusBadge status={clone.status} />
                     {clone.messages_today !== undefined && (
                       <span className="text-xs text-gray-600 font-mono">
-                        {clone.messages_today} msg
+                        {clone.messages_today} pesan
                       </span>
                     )}
                   </li>
@@ -374,7 +403,7 @@ export default function DashboardPage() {
         <section>
           <h2 className="text-xs text-gray-600 uppercase tracking-widest font-semibold mb-3 flex items-center gap-2">
             <Trophy className="w-3.5 h-3.5" />
-            Leaderboard
+            Papan Peringkat
           </h2>
 
           <Card className="overflow-hidden p-0">
@@ -393,7 +422,7 @@ export default function DashboardPage() {
             ) : leaderboard.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Trophy className="w-8 h-8 text-gray-700 mb-2" />
-                <p className="text-sm text-gray-600">No leaderboard data</p>
+                <p className="text-sm text-gray-600">Data papan peringkat kosong</p>
               </div>
             ) : (
               <ul className="divide-y divide-bg-border">
@@ -437,7 +466,7 @@ export default function DashboardPage() {
       {/* ── Footer ── */}
       <footer className="pt-4 border-t border-bg-border text-center">
         <p className="text-xs text-gray-700 font-mono">
-          Asuma MD Dashboard — auto-refreshes every 30s
+          Asuma MD Dashboard — refresh otomatis setiap 30 detik
           {" · "}
           <span className="text-accent-green/50">
             {process.env.NEXT_PUBLIC_API_URL}
