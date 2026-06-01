@@ -1,3 +1,4 @@
+// types/bot.ts
 export interface BotStatus {
   status: "online" | "offline" | "connecting";
   uptime?: number | string;
