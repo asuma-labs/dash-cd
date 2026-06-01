@@ -11,12 +11,21 @@ interface WebSocketMessage {
 export function useWebSocket() {
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
+  
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<number | null>(null); 
+  const isIntentionalDisconnect = useRef(false);
 
   const connect = useCallback(() => {
     const token = getToken();
     if (!token) return;
+
+    if (reconnectTimeoutRef.current) {
+      window.clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    isIntentionalDisconnect.current = false;
 
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "wss://bot.asuma.my.id/ws";
     const ws = new WebSocket(`${wsUrl}?token=${token}`);
@@ -38,21 +47,34 @@ export function useWebSocket() {
 
     ws.onerror = (error) => {
       console.error("WebSocket error:", error);
-      setIsConnected(false);
     };
 
     ws.onclose = () => {
       console.log("WebSocket disconnected");
       setIsConnected(false);
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = setTimeout(() => connect(), 5000);
+      wsRef.current = null;
+
+      if (!isIntentionalDisconnect.current) {
+        console.log("Attempting to reconnect in 5 seconds...");
+        if (reconnectTimeoutRef.current) window.clearTimeout(reconnectTimeoutRef.current);
+        
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          connect();
+        }, 5000);
+      }
     };
 
     wsRef.current = ws;
   }, []);
 
   const disconnect = useCallback(() => {
-    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+    isIntentionalDisconnect.current = true;
+    
+    if (reconnectTimeoutRef.current) {
+      window.clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
@@ -63,6 +85,8 @@ export function useWebSocket() {
   const sendMessage = useCallback((message: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
+    } else {
+      console.warn("WebSocket is not open. Message not sent:", message);
     }
   }, []);
 
@@ -71,8 +95,11 @@ export function useWebSocket() {
     if (token) {
       connect();
     }
-    return () => disconnect();
-  }, [connect, disconnect]);
+    
+    return () => {
+      disconnect();
+    };
+  }, []);
 
-  return { isConnected, lastMessage, sendMessage };
+  return { isConnected, lastMessage, sendMessage, disconnect, connect };
 }
