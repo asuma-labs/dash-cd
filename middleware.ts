@@ -39,8 +39,7 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get("asuma_token")?.value;
 
-  console.log(`[Middleware] ${pathname} - token: ${token ? "exists" : "missing"}`);
-
+  console.log(`🔍 [Middleware] ${pathname} - token: ${token ? "✅ ada" : "❌ tidak ada"}`);
   const isAuthRoute = AUTH_ROUTES.some((r) => pathname.startsWith(r));
   const isProtectedRoute = PROTECTED_ROUTES.some((r) => pathname.startsWith(r));
 
