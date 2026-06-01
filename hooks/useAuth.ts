@@ -77,7 +77,9 @@ export function useAuth() {
     (updatedUser: Partial<User>) => {
       const newUser = { ...user, ...updatedUser } as User;
       localStorage.setItem("asuma_user", JSON.stringify(newUser));
-      setAuth(token!, newUser);
+      if (token) {
+        setAuth(token, newUser);
+      }
     },
     [user, token, setAuth]
   );
