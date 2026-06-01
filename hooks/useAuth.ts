@@ -1,149 +1,43 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { authService } from "@/services/auth.service";
-import { setToken, getToken, removeToken, syncTokenFromCookieToStorage } from "@/lib/auth";
+import { setToken, getToken, removeToken } from "@/lib/auth";
 import type { LoginPayload, RegisterPayload } from "@/types/auth";
 
 export function useAuth() {
   const router = useRouter();
+  const [isClient, setIsClient] = useState(false);
   const { token, user, isLoading, isAuthenticated, setAuth, clearAuth, setLoading, hydrateFromStorage } =
     useAuthStore();
 
-  // Hydrate from storage on mount (no redirect inside)
+  // Hydrate only once after mount
   useEffect(() => {
-    syncTokenFromCookieToStorage();
+    setIsClient(true);
     const storedToken = getToken();
-    
     let storedUser = null;
-    if (typeof window !== "undefined") {
-      const userRaw = localStorage.getItem("asuma_user");
-      if (userRaw) {
-        try {
-          storedUser = JSON.parse(userRaw);
-        } catch (e) {
-          console.error("Failed to parse stored user", e);
-        }
-      }
-    }
-    
+    try {
+      const rawUser = localStorage.getItem("asuma_user");
+      if (rawUser) storedUser = JSON.parse(rawUser);
+    } catch (e) {}
     hydrateFromStorage(storedToken, storedUser);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hydrateFromStorage]);
 
-  // Listen for 401 unauthorized event from axios interceptor
+  // Listen for 401
   useEffect(() => {
+    if (!isClient) return;
     const handleUnauthorized = () => {
-      clearAuth();
-      // Hapus juga user dari localStorage
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("asuma_user");
-      }
-      router.push("/login");
-    };
-
-    window.addEventListener("asuma:unauthorized", handleUnauthorized);
-    return () => window.removeEventListener("asuma:unauthorized", handleUnauthorized);
-  }, [clearAuth, router]);
-
-  const login = useCallback(
-    async (payload: LoginPayload) => {
-      setLoading(true);
-      try {
-        const data = await authService.login(payload);
-        setToken(data.token);
-        // Simpan user ke localStorage
-        if (typeof window !== "undefined") {
-          localStorage.setItem("asuma_user", JSON.stringify(data.user));
-        }
-        setAuth(data.token, data.user);
-        router.push("/dashboard");
-      } catch (error) {
-        setLoading(false);
-        throw error;
-      }
-    },
-    [setAuth, setLoading, router]
-  );
-
-  const register = useCallback(
-    async (payload: RegisterPayload) => {
-      setLoading(true);
-      try {
-        const data = await authService.register(payload);
-        setToken(data.token);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("asuma_user", JSON.stringify(data.user));
-        }
-        setAuth(data.token, data.user);
-        router.push("/dashboard");
-      } catch (error) {
-        setLoading(false);
-        throw error;
-      }
-    },
-    [setAuth, setLoading, router]
-  );
-
-  const logout = useCallback(() => {
-    removeToken();
-    if (typeof window !== "undefined") {
+      console.log("401 detected, logging out");
+      removeToken();
       localStorage.removeItem("asuma_user");
-    }
-    clearAuth();
-    router.push("/login");
-  }, [clearAuth, router]);
-
-  return {
-    token,
-    user,
-    isLoading,
-    isAuthenticated,
-    login,
-    register,
-    logout,
-  };
-}
-/*"use client";
-
-import { useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/store/auth.store";
-import { authService } from "@/services/auth.service";
-import { setToken, getToken, removeToken, syncTokenFromCookieToStorage } from "@/lib/auth";
-import type { LoginPayload, RegisterPayload } from "@/types/auth";
-
-export function useAuth() {
-  const router = useRouter();
-  const { token, user, isLoading, isAuthenticated, setAuth, clearAuth, setLoading, hydrateFromStorage } =
-    useAuthStore();
-
-  // Hydrate from storage on mount (no redirect inside)
-  useEffect(() => {
-    syncTokenFromCookieToStorage();
-    const storedToken = getToken();
-
-    if (storedToken) {
-      // Restore minimal auth state; no API call needed
-      hydrateFromStorage(storedToken, user);
-    } else {
-      hydrateFromStorage(null, null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Listen for 401 unauthorized event from axios interceptor
-  useEffect(() => {
-    const handleUnauthorized = () => {
       clearAuth();
       router.push("/login");
     };
-
     window.addEventListener("asuma:unauthorized", handleUnauthorized);
     return () => window.removeEventListener("asuma:unauthorized", handleUnauthorized);
-  }, [clearAuth, router]);
+  }, [isClient, clearAuth, router]);
 
   const login = useCallback(
     async (payload: LoginPayload) => {
@@ -151,11 +45,13 @@ export function useAuth() {
       try {
         const data = await authService.login(payload);
         setToken(data.token);
+        localStorage.setItem("asuma_user", JSON.stringify(data.user));
         setAuth(data.token, data.user);
         router.push("/dashboard");
-      } catch (error) {
+      } catch (err) {
+        console.error("Login error", err);
         setLoading(false);
-        throw error;
+        throw err;
       }
     },
     [setAuth, setLoading, router]
@@ -167,11 +63,13 @@ export function useAuth() {
       try {
         const data = await authService.register(payload);
         setToken(data.token);
+        localStorage.setItem("asuma_user", JSON.stringify(data.user));
         setAuth(data.token, data.user);
         router.push("/dashboard");
-      } catch (error) {
+      } catch (err) {
+        console.error("Register error", err);
         setLoading(false);
-        throw error;
+        throw err;
       }
     },
     [setAuth, setLoading, router]
@@ -179,17 +77,10 @@ export function useAuth() {
 
   const logout = useCallback(() => {
     removeToken();
+    localStorage.removeItem("asuma_user");
     clearAuth();
     router.push("/login");
   }, [clearAuth, router]);
 
-  return {
-    token,
-    user,
-    isLoading,
-    isAuthenticated,
-    login,
-    register,
-    logout,
-  };
-}*/
+  return { token, user, isLoading, isAuthenticated, login, register, logout };
+}
