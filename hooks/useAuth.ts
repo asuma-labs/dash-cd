@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { authService } from "@/services/auth.service";
 import { setToken, getToken, removeToken } from "@/lib/auth";
-import type { LoginPayload, RegisterPayload } from "@/types/auth";
+import type { LoginPayload, RegisterPayload, User } from "@/types/auth";
 
 export function useAuth() {
   const router = useRouter();
@@ -13,7 +13,6 @@ export function useAuth() {
   const { token, user, isLoading, isAuthenticated, setAuth, clearAuth, setLoading, hydrateFromStorage } =
     useAuthStore();
 
-  // Hydrate only once after mount
   useEffect(() => {
     setIsClient(true);
     const storedToken = getToken();
@@ -25,7 +24,6 @@ export function useAuth() {
     hydrateFromStorage(storedToken, storedUser);
   }, [hydrateFromStorage]);
 
-  // Listen for 401
   useEffect(() => {
     if (!isClient) return;
     const handleUnauthorized = () => {
@@ -75,6 +73,15 @@ export function useAuth() {
     [setAuth, setLoading, router]
   );
 
+  const updateUser = useCallback(
+    (updatedUser: Partial<User>) => {
+      const newUser = { ...user, ...updatedUser } as User;
+      localStorage.setItem("asuma_user", JSON.stringify(newUser));
+      setAuth(token!, newUser);
+    },
+    [user, token, setAuth]
+  );
+
   const logout = useCallback(() => {
     removeToken();
     localStorage.removeItem("asuma_user");
@@ -82,5 +89,5 @@ export function useAuth() {
     router.push("/login");
   }, [clearAuth, router]);
 
-  return { token, user, isLoading, isAuthenticated, login, register, logout };
+  return { token, user, isLoading, isAuthenticated, login, register, logout, updateUser };
 }
