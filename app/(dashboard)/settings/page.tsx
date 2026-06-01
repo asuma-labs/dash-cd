@@ -13,10 +13,12 @@ export default function SettingsPage() {
         e.preventDefault();
         setLoading(true);
         try {
-            // Panggil API update profile
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/me`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    Authorization: `Bearer ${localStorage.getItem('token')}` 
+                },
                 body: JSON.stringify({ email })
             });
             if (res.ok) {
@@ -37,19 +39,25 @@ export default function SettingsPage() {
             <div className="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
                 <h2 className="text-lg font-semibold mb-4">Profile Settings</h2>
                 <form onSubmit={handleUpdateProfile} className="space-y-4">
-                    <Input
-                        label="Username"
-                        value={user?.username || ''}
-                        disabled
-                        className="bg-gray-800"
-                    />
-                    <Input
-                        label="Email"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="your@email.com"
-                    />
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Username</label>
+                        <input
+                            type="text"
+                            value={user?.username || ''}
+                            disabled
+                            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded focus:outline-none focus:border-blue-500 disabled:opacity-50"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Email</label>
+                        <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="your@email.com"
+                            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded focus:outline-none focus:border-blue-500"
+                        />
+                    </div>
                     <Button type="submit" disabled={loading}>
                         {loading ? 'Saving...' : 'Save Changes'}
                     </Button>
