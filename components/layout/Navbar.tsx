@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/Button";
 import {
@@ -14,13 +15,27 @@ import {
   Wrench,
   MessageSquare,
   Radio,
+  Settings,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
-import { useState } from "react";
 
 export function Navbar() {
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+
+  useEffect(() => {
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'wss://bot.asuma.my.id/ws';
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => setWsConnected(true);
+    ws.onclose = () => setWsConnected(false);
+    ws.onerror = () => setWsConnected(false);
+
+    return () => ws.close();
+  }, []);
 
   const navLinks = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -28,6 +43,7 @@ export function Navbar() {
     { href: "/tools", label: "Tools", icon: Wrench },
     { href: "/chatbots", label: "Chatbots", icon: MessageSquare },
     { href: "/jadibot", label: "Jadibot", icon: Radio },
+    { href: "/settings", label: "Settings", icon: Settings },
   ];
 
   return (
@@ -43,6 +59,21 @@ export function Navbar() {
               <span className="text-accent-green font-bold tracking-tight"> MD</span>
             </div>
           </Link>
+
+          {/* WebSocket Indicator */}
+          <div className="hidden md:flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-800/50">
+            {wsConnected ? (
+              <>
+                <Wifi className="w-3.5 h-3.5 text-green-400" />
+                <span className="text-xs text-gray-400">Realtime</span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="w-3.5 h-3.5 text-red-400" />
+                <span className="text-xs text-gray-500">Offline</span>
+              </>
+            )}
+          </div>
 
           <nav className="hidden md:flex items-center gap-1">
             {navLinks.map(({ href, label, icon: Icon }) => (
@@ -92,7 +123,7 @@ export function Navbar() {
         </div>
 
         {menuOpen && (
-          <div className="md:hidden border-t border-bg-border py-3 space-y-1 animate-fade-in">
+          <div className="md:hidden border-t border-bg-border py-3 space-y-1">
             {navLinks.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
