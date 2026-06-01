@@ -1,10 +1,10 @@
-// app/(dashboard)/dashboard/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { botService } from "@/services/bot.service";
 import { useAuth } from "@/hooks/useAuth";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import type { BotStatus, SystemStats, Clone, LeaderboardEntry } from "@/types/bot";
 import {
   Activity,
@@ -91,6 +91,7 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
 export default function DashboardPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
+  const { isConnected: wsConnected, lastMessage } = useWebSocket();
   const [botStatus, setBotStatus] = useState<BotStatus | null>(null);
   const [sysStats, setSysStats] = useState<SystemStats | null>(null);
   const [clones, setClones] = useState<Clone[]>([]);
@@ -100,6 +101,19 @@ export default function DashboardPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (lastMessage?.type === "bot_status") {
+      setBotStatus(lastMessage.data);
+      setLastUpdated(new Date());
+    }
+    if (lastMessage?.type === "system_stats") {
+      setSysStats(lastMessage.data);
+    }
+    if (lastMessage?.type === "clones") {
+      setClones(lastMessage.data);
+    }
+  }, [lastMessage]);
 
   const fetchAll = useCallback(async (silent = false) => {
     if (!isAuthenticated) return;
@@ -189,11 +203,24 @@ export default function DashboardPage() {
               </span>
             )}
           </h1>
-          <p className="text-sm text-gray-600 mt-0.5">
-            {lastUpdated
-              ? `Terakhir diperbarui: ${lastUpdated.toLocaleTimeString()}`
-              : "Memuat data..."}
-          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-sm text-gray-600">
+              {lastUpdated
+                ? `Terakhir diperbarui: ${lastUpdated.toLocaleTimeString()}`
+                : "Memuat data..."}
+            </p>
+            {wsConnected ? (
+              <span className="flex items-center gap-1 text-xs text-green-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+                Real-time
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-xs text-gray-500">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
+                Polling
+              </span>
+            )}
+          </div>
         </div>
         <button
           onClick={() => fetchAll(true)}
@@ -355,7 +382,7 @@ export default function DashboardPage() {
 
       <footer className="pt-4 border-t border-gray-800 text-center">
         <p className="text-xs text-gray-700 font-mono">
-          Asuma MD Dashboard — refresh otomatis setiap 30 detik
+          Asuma MD Dashboard — {wsConnected ? "WebSocket connected" : "Polling every 30s"}
           {" · "}
           <span className="text-cyan-400/50">{process.env.NEXT_PUBLIC_API_URL}</span>
         </p>
