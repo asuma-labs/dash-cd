@@ -23,8 +23,6 @@ import {
   Globe,
 } from "lucide-react";
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
 function formatUptime(raw?: number | string): string {
   if (!raw) return "—";
   const seconds = typeof raw === "string" ? parseInt(raw, 10) : raw;
@@ -83,8 +81,6 @@ function SkeletonCard() {
   );
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
-
 export default function DashboardPage() {
   const router = useRouter();
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
@@ -95,54 +91,83 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-const fetchAll = useCallback(async (silent = false) => {
-  if (!silent) setLoading(true);
-  else setRefreshing(true);
-
-  try {
-    const [status, stats, clonesData, lb] = await Promise.allSettled([
-      botService.getBotStatus(),
-      botService.getSystemStats(),
-      botService.getClones(),
-      botService.getLeaderboard(),
-    ]);
-
-    // Logging untuk debugging (di console browser)
-    console.log("API Results:", { status, stats, clonesData, lb });
-
-    if (status.status === "fulfilled") {
-      console.log("Bot Status:", status.value);
-      setBotStatus(status.value);
-    } else {
-      console.error("Bot Status Error:", status.reason);
+  const fetchAll = useCallback(async (silent = false) => {
+    if (!isAuthenticated) {
+      console.log("Fetch skipped: not authenticated");
+      return;
     }
-    
-    if (stats.status === "fulfilled") {
-      console.log("System Stats:", stats.value);
-      setSysStats(stats.value);
-    } else {
-      console.error("System Stats Error:", stats.reason);
-    }
-    
-    if (clonesData.status === "fulfilled") setClones(clonesData.value);
-    else console.error("Clones Error:", clonesData.reason);
-    
-    if (lb.status === "fulfilled") setLeaderboard(lb.value.slice(0, 10));
-    else console.error("Leaderboard Error:", lb.reason);
 
-    setLastUpdated(new Date());
-  } finally {
-    setLoading(false);
-    setRefreshing(false);
-  }
-}, []);
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
+    
+    setErrorMessage(null);
+
+    try {
+      console.log("Fetching API data...");
+      
+      const [status, stats, clonesData, lb] = await Promise.allSettled([
+        botService.getBotStatus(),
+        botService.getSystemStats(),
+        botService.getClones(),
+        botService.getLeaderboard(),
+      ]);
+
+      console.log("Status result:", status);
+      console.log("Stats result:", stats);
+      console.log("Clones result:", clonesData);
+      console.log("Leaderboard result:", lb);
+
+      if (status.status === "fulfilled") {
+        console.log("Bot Status value:", status.value);
+        setBotStatus(status.value);
+      } else {
+        console.error("Bot Status error:", status.reason);
+      }
+      
+      if (stats.status === "fulfilled") {
+        console.log("System Stats value:", stats.value);
+        setSysStats(stats.value);
+      } else {
+        console.error("System Stats error:", stats.reason);
+      }
+      
+      if (clonesData.status === "fulfilled") {
+        console.log("Clones value:", clonesData.value);
+        setClones(clonesData.value);
+      } else {
+        console.error("Clones error:", clonesData.reason);
+      }
+      
+      if (lb.status === "fulfilled") {
+        console.log("Leaderboard value:", lb.value);
+        setLeaderboard(lb.value.slice(0, 10));
+      } else {
+        console.error("Leaderboard error:", lb.reason);
+      }
+
+      const allRejected = [status, stats, clonesData, lb].every(r => r.status === "rejected");
+      if (allRejected) {
+        setErrorMessage("Gagal mengambil data dari server. Mungkin server sedang offline atau koneksi bermasalah.");
+      }
+
+      setLastUpdated(new Date());
+    } catch (err) {
+      console.error("FetchAll error:", err);
+      setErrorMessage("Terjadi kesalahan saat memuat data.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
+      console.log("Auth ready, starting fetch");
       fetchAll(false);
-      intervalRef.current = setInterval(() => fetchAll(true), 30_000);
+      intervalRef.current = setInterval(() => fetchAll(true), 30000);
       return () => {
         if (intervalRef.current) clearInterval(intervalRef.current);
       };
@@ -151,6 +176,7 @@ const fetchAll = useCallback(async (silent = false) => {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
+      console.log("Not authenticated, redirecting to login");
       router.push("/login");
     }
   }, [authLoading, isAuthenticated, router]);
@@ -169,11 +195,9 @@ const fetchAll = useCallback(async (silent = false) => {
   if (!isAuthenticated) return null;
 
   const ram = sysStats?.ram;
-  const ramPercent =
-    ram?.percent ??
-    (ram?.used && ram?.total
-      ? Math.round((parseFloat(String(ram.used)) / parseFloat(String(ram.total))) * 100)
-      : null);
+  const ramPercent = ram?.percent ?? (ram?.used && ram?.total
+    ? Math.round((parseFloat(String(ram.used)) / parseFloat(String(ram.total))) * 100)
+    : null);
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -181,10 +205,16 @@ const fetchAll = useCallback(async (silent = false) => {
         <div>
           <h1 className="text-2xl font-bold text-white">
             Dashboard
-            {user && <span className="text-gray-500 font-normal text-base ml-2">— {user.username}</span>}
+            {user && (
+              <span className="text-gray-500 font-normal text-base ml-2">
+                — {user.username}
+              </span>
+            )}
           </h1>
           <p className="text-sm text-gray-600 mt-0.5">
-            {lastUpdated ? `Terakhir diperbarui: ${lastUpdated.toLocaleTimeString()}` : "Memuat data..."}
+            {lastUpdated
+              ? `Terakhir diperbarui: ${lastUpdated.toLocaleTimeString()}`
+              : "Memuat data..."}
           </p>
         </div>
         <button
@@ -197,9 +227,16 @@ const fetchAll = useCallback(async (silent = false) => {
         </button>
       </div>
 
+      {errorMessage && (
+        <div className="bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-lg text-sm">
+          ⚠️ {errorMessage}
+        </div>
+      )}
+
       <section>
         <h2 className="text-xs text-gray-600 uppercase tracking-widest font-semibold mb-3 flex items-center gap-2">
-          <Activity className="w-3.5 h-3.5" /> Status Bot
+          <Activity className="w-3.5 h-3.5" />
+          Status Bot
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {loading ? (
@@ -212,9 +249,25 @@ const fetchAll = useCallback(async (silent = false) => {
                 icon={<Wifi className="w-4 h-4" />}
                 status={botStatus?.status as "online" | "offline" | "connecting" | undefined}
               />
-              <StatCard label="Uptime" value={formatUptime(botStatus?.uptime)} icon={<Clock className="w-4 h-4" />} status="neutral" />
-              <StatCard label="Clones" value={botStatus?.clones ?? clones.length ?? 0} icon={<Users className="w-4 h-4" />} status="neutral" subtext="instance aktif" />
-              <StatCard label="Publik" value={botStatus?.public ? "Ya" : "Tidak"} icon={<Globe className="w-4 h-4" />} status={botStatus?.public ? "online" : "offline"} />
+              <StatCard
+                label="Uptime"
+                value={formatUptime(botStatus?.uptime)}
+                icon={<Clock className="w-4 h-4" />}
+                status="neutral"
+              />
+              <StatCard
+                label="Clones"
+                value={botStatus?.clones ?? clones.length ?? 0}
+                icon={<Users className="w-4 h-4" />}
+                status="neutral"
+                subtext="instance aktif"
+              />
+              <StatCard
+                label="Publik"
+                value={botStatus?.public ? "Ya" : "Tidak"}
+                icon={<Globe className="w-4 h-4" />}
+                status={botStatus?.public ? "online" : "offline"}
+              />
             </>
           )}
         </div>
@@ -222,43 +275,78 @@ const fetchAll = useCallback(async (silent = false) => {
 
       <section>
         <h2 className="text-xs text-gray-600 uppercase tracking-widest font-semibold mb-3 flex items-center gap-2">
-          <Server className="w-3.5 h-3.5" /> Statistik Sistem
+          <Server className="w-3.5 h-3.5" />
+          Statistik Sistem
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {loading ? (
             Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
           ) : (
             <>
-              <Card glow>
+              <Card glow className="col-span-1">
                 <div className="flex items-start justify-between mb-3">
-                  <p className="text-xs text-gray-500 uppercase tracking-widest font-medium">Penggunaan RAM</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-widest font-medium">
+                    Penggunaan RAM
+                  </p>
                   <MemoryStick className="w-4 h-4 text-gray-600" />
                 </div>
-                <p className="text-2xl font-bold font-mono text-accent-cyan mb-2">{ramPercent !== null ? `${ramPercent}%` : "—"}</p>
+                <p className="text-2xl font-bold font-mono text-accent-cyan mb-2">
+                  {ramPercent !== null ? `${ramPercent}%` : "—"}
+                </p>
                 {ramPercent !== null && (
                   <div className="h-1.5 bg-bg-border rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-700" style={{ width: `${ramPercent}%`, background: ramPercent > 80 ? "#ff4444" : ramPercent > 60 ? "#facc15" : "#00d4ff" }} />
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${ramPercent}%`,
+                        background: ramPercent > 80 ? "#ff4444" : ramPercent > 60 ? "#facc15" : "#00d4ff",
+                      }}
+                    />
                   </div>
                 )}
-                <p className="text-xs text-gray-600 mt-1.5">{formatBytes(ram?.used)} / {formatBytes(ram?.total)}</p>
+                <p className="text-xs text-gray-600 mt-1.5">
+                  {formatBytes(ram?.used)} / {formatBytes(ram?.total)}
+                </p>
               </Card>
+
               <Card glow>
                 <div className="flex items-start justify-between mb-3">
-                  <p className="text-xs text-gray-500 uppercase tracking-widest font-medium">CPU</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-widest font-medium">
+                    CPU
+                  </p>
                   <Cpu className="w-4 h-4 text-gray-600" />
                 </div>
-                <p className="text-2xl font-bold font-mono text-accent-cyan">{sysStats?.cpu?.usage !== undefined ? `${sysStats.cpu.usage}%` : "—"}</p>
-                {sysStats?.cpu?.cores && <p className="text-xs text-gray-600 mt-1">{sysStats.cpu.cores} core</p>}
+                <p className="text-2xl font-bold font-mono text-accent-cyan">
+                  {sysStats?.cpu?.usage !== undefined ? `${sysStats.cpu.usage}%` : "—"}
+                </p>
+                {sysStats?.cpu?.cores && (
+                  <p className="text-xs text-gray-600 mt-1">
+                    {sysStats.cpu.cores} core
+                  </p>
+                )}
               </Card>
+
               <Card glow>
                 <div className="flex items-start justify-between mb-3">
-                  <p className="text-xs text-gray-500 uppercase tracking-widest font-medium">Platform</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-widest font-medium">
+                    Platform
+                  </p>
                   <Terminal className="w-4 h-4 text-gray-600" />
                 </div>
-                <p className="text-lg font-bold font-mono text-accent-cyan capitalize truncate">{sysStats?.platform ?? sysStats?.os ?? "—"}</p>
+                <p className="text-lg font-bold font-mono text-accent-cyan capitalize truncate">
+                  {sysStats?.platform ?? sysStats?.os ?? "—"}
+                </p>
                 <div className="mt-1 space-y-0.5">
-                  {sysStats?.arch && <p className="text-xs text-gray-600">Arsitektur: {sysStats.arch}</p>}
-                  {sysStats?.node_version && <p className="text-xs text-gray-600">Node.js: {sysStats.node_version}</p>}
+                  {sysStats?.arch && (
+                    <p className="text-xs text-gray-600">
+                      Arsitektur: {sysStats.arch}
+                    </p>
+                  )}
+                  {sysStats?.node_version && (
+                    <p className="text-xs text-gray-600">
+                      Node.js: {sysStats.node_version}
+                    </p>
+                  )}
                 </div>
               </Card>
             </>
@@ -269,7 +357,9 @@ const fetchAll = useCallback(async (silent = false) => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section>
           <h2 className="text-xs text-gray-600 uppercase tracking-widest font-semibold mb-3 flex items-center gap-2">
-            <Phone className="w-3.5 h-3.5" /> Clone Bot <span className="text-accent-green">({clones.length})</span>
+            <Phone className="w-3.5 h-3.5" />
+            Clone Bot{" "}
+            <span className="text-accent-green">({clones.length})</span>
           </h2>
           <Card className="overflow-hidden p-0">
             {loading ? (
@@ -292,16 +382,31 @@ const fetchAll = useCallback(async (silent = false) => {
             ) : (
               <ul className="divide-y divide-bg-border">
                 {clones.map((clone, idx) => (
-                  <li key={clone.id ?? idx} className="flex items-center gap-3 px-5 py-3.5 hover:bg-white/[0.02] transition-colors">
+                  <li
+                    key={clone.id ?? idx}
+                    className="flex items-center gap-3 px-5 py-3.5 hover:bg-white/[0.02] transition-colors"
+                  >
                     <div className="w-8 h-8 rounded-lg bg-accent-green/10 border border-accent-green/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-bold text-accent-green">{idx + 1}</span>
+                      <span className="text-xs font-bold text-accent-green">
+                        {idx + 1}
+                      </span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">{clone.name ?? clone.phone ?? `Clone #${idx + 1}`}</p>
-                      {clone.owner && <p className="text-xs text-gray-600 truncate">Pemilik: {clone.owner}</p>}
+                      <p className="text-sm font-medium text-white truncate">
+                        {clone.name ?? clone.phone ?? `Clone #${idx + 1}`}
+                      </p>
+                      {clone.owner && (
+                        <p className="text-xs text-gray-600 truncate">
+                          Pemilik: {clone.owner}
+                        </p>
+                      )}
                     </div>
                     <StatusBadge status={clone.status} />
-                    {clone.messages_today !== undefined && <span className="text-xs text-gray-600 font-mono">{clone.messages_today} pesan</span>}
+                    {clone.messages_today !== undefined && (
+                      <span className="text-xs text-gray-600 font-mono">
+                        {clone.messages_today} pesan
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -311,7 +416,8 @@ const fetchAll = useCallback(async (silent = false) => {
 
         <section>
           <h2 className="text-xs text-gray-600 uppercase tracking-widest font-semibold mb-3 flex items-center gap-2">
-            <Trophy className="w-3.5 h-3.5" /> Papan Peringkat
+            <Trophy className="w-3.5 h-3.5" />
+            Papan Peringkat
           </h2>
           <Card className="overflow-hidden p-0">
             {loading ? (
@@ -337,11 +443,16 @@ const fetchAll = useCallback(async (silent = false) => {
                   const rank = entry.rank ?? idx + 1;
                   const score = entry.score ?? entry.messages ?? entry.points ?? 0;
                   return (
-                    <li key={idx} className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
+                    <li
+                      key={idx}
+                      className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors"
+                    >
                       <span className="text-sm font-bold font-mono w-6 text-center">
                         {rank <= 3 ? ["🥇", "🥈", "🥉"][rank - 1] : `#${rank}`}
                       </span>
-                      <p className="flex-1 text-sm text-white font-medium truncate">{entry.username}</p>
+                      <p className="flex-1 text-sm text-white font-medium truncate">
+                        {entry.username}
+                      </p>
                       <span className="text-xs font-mono text-accent-cyan bg-accent-cyan/10 px-2 py-0.5 rounded-md">
                         {score.toLocaleString()}
                       </span>
@@ -358,7 +469,9 @@ const fetchAll = useCallback(async (silent = false) => {
         <p className="text-xs text-gray-700 font-mono">
           Asuma MD Dashboard — refresh otomatis setiap 30 detik
           {" · "}
-          <span className="text-accent-green/50">{process.env.NEXT_PUBLIC_API_URL}</span>
+          <span className="text-accent-green/50">
+            {process.env.NEXT_PUBLIC_API_URL}
+          </span>
         </p>
       </footer>
     </div>
